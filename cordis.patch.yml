@@ -1,0 +1,6 @@
+# Host-only adapter. Configure the credential directory, pinned agent, model and
+# optional schedules in the consuming DSH profile, not in this reusable bundle.
+- insert:
+    - id: telegram-bridge
+      name: dsh-telegram-bridge
+      config: {}

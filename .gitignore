@@ -1,0 +1,20 @@
+# Allowlist: never accidentally publish bot state, credentials, logs, or local caches.
+/*
+!/.gitignore
+!/README.md
+!/LICENSE
+!/package.json
+!/cordis.patch.yml
+!/index.js
+!/commands.js
+!/commands.test.js
+!/headless-session.js
+!/headless-session.test.js
+!/typing.js
+!/typing.test.js
+!/workspace-reconciliation.js
+!/workspace-reconciliation.test.js
+!/core.js
+!/schedule.js
+!/core.test.js
+!/schedule.test.js
