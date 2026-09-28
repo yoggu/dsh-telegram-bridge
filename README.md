@@ -7,13 +7,13 @@ Host-only Cordis bundle for a **single pre-authorized private Telegram chat**. I
 Install the tagged GitHub release into the DSH profile that owns the Telegram bot:
 
 ```sh
-dsh plugin --profile telegram add 'https://github.com/yoggu/dsh-telegram-bridge.git#v0.1.0'
+dsh plugin --profile telegram add 'https://github.com/yoggu/dsh-telegram-bridge.git#v0.1.1'
 ```
 
 Or download and link a local checkout:
 
 ```sh
-git clone --branch v0.1.0 --depth 1 https://github.com/yoggu/dsh-telegram-bridge.git
+git clone --branch v0.1.1 --depth 1 https://github.com/yoggu/dsh-telegram-bridge.git
 cd dsh-telegram-bridge
 pnpm install
 dsh plugin --profile telegram add "link:$(pwd)"
@@ -66,4 +66,4 @@ To uninstall: `dsh plugin --profile telegram remove dsh-telegram-bridge`.
 
 ## Tests and license
 
-Run `npm test` after installing the DSH peer dependencies. Requires a DSH `0.1.7-rc.2`-compatible installation with the base Agent, Session, SessionQuery, preset registry and Cordis services. Automatic compaction is supplied by the consuming profile's agent preset, not this bridge. MIT; see [LICENSE](LICENSE).
+Run `npm test` after installing the DSH peer dependencies. Requires a DSH `0.1.7-rc.2`- or `0.2.0-rc.1`-compatible installation with the base Agent, Session, SessionQuery, preset registry and Cordis services. Automatic compaction is supplied by the consuming profile's agent preset, not this bridge. MIT; see [LICENSE](LICENSE).
