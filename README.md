@@ -4,16 +4,16 @@ Host-only Cordis bundle for a **single pre-authorized private Telegram chat**. I
 
 ## Install
 
-Install the latest source from the existing default branch into the DSH profile that owns the Telegram bot (older tags may not contain English messages):
+Install the latest tagged GitHub release into the DSH profile that owns the Telegram bot:
 
 ```sh
-dsh plugin --profile telegram add 'https://github.com/yoggu/dsh-telegram-bridge.git#main'
+dsh plugin --profile telegram add 'https://github.com/yoggu/dsh-telegram-bridge.git#v0.1.2'
 ```
 
 Or download and link a local checkout:
 
 ```sh
-git clone https://github.com/yoggu/dsh-telegram-bridge.git
+git clone --branch v0.1.2 --depth 1 https://github.com/yoggu/dsh-telegram-bridge.git
 cd dsh-telegram-bridge
 pnpm install
 dsh plugin --profile telegram add "link:$(pwd)"
