@@ -6,12 +6,15 @@ import { createHeadlessSessions } from './headless-session.js'
 import { createTypingNotifier } from './typing.js'
 import { formatStatus, syncPrivateCommands } from './commands.js'
 
+export { Config } from './config.js'
 export const name = 'dsh-telegram-bridge'
 export const inject = ['agents', 'sessions', 'sessionQuery', 'sessionPersistence', 'agentPresets', 'permissionPresets']
 
 /** Host-only Cordis plugin. Telegram updates are never trusted to select a DSH session or filesystem path. */
 export function apply(ctx, config = {}) {
   const paths = validateBridgeConfig(config)
+  // Host-only locale: explicit German opt-in; unset/unknown languages use English.
+  const t = (de, en) => config.language === 'de' ? de : en
   const { jobs, nextRun, slotKey } = createSchedule(config.jobs || [], config.timeZone || 'UTC')
   const headless = createHeadlessSessions(ctx, config)
   let running = true
@@ -65,12 +68,12 @@ export function apply(ctx, config = {}) {
     if (agent.session.id === ownedSessionId && pending && message.source?.rpcId === pending.requestId) {
       const target = pending
       pending = null
-      target.resolve({ text: 'DSH: Anfrage verworfen.', success: false })
+      target.resolve({ text: t('DSH: Anfrage verworfen.', 'DSH: Request discarded.'), success: false })
     }
     const scheduled = scheduledPending.get(agent.session.id)
     if (scheduled && message.source?.rpcId === scheduled.requestId) {
       scheduledPending.delete(agent.session.id)
-      scheduled.resolve({ text: 'DSH: geplante Anfrage verworfen.', success: false })
+      scheduled.resolve({ text: t('DSH: geplante Anfrage verworfen.', 'DSH: Scheduled request discarded.'), success: false })
     }
   })
   ctx.on('session/event', (session, event) => {
@@ -83,7 +86,7 @@ export function apply(ctx, config = {}) {
     if (event.type === 'turn/end' && event.data.turn === target.turn) {
       if (target === pending) pending = null
       else scheduledPending.delete(session.id)
-      target.resolve({ text: target.answer || `DSH: turn ${event.data.reason.kind}; keine Textantwort.`, success: event.data.reason.kind === 'completed' && Boolean(target.answer?.trim()) })
+      target.resolve({ text: target.answer || t(`DSH: turn ${event.data.reason.kind}; keine Textantwort.`, `DSH: turn ${event.data.reason.kind}; no text response.`), success: event.data.reason.kind === 'completed' && Boolean(target.answer?.trim()) })
     }
   })
 
@@ -101,7 +104,7 @@ export function apply(ctx, config = {}) {
     try {
       headless.prompt(sessionId, text, requestId)
       stopTyping = typing.start()
-      return await withDeadline(result, 20 * 60 * 1000, { text: 'DSH: Zeitlimit erreicht. Die Sitzung kann noch laufen; bitte keine riskante Anfrage blind wiederholen.', success: false })
+      return await withDeadline(result, 20 * 60 * 1000, { text: t('DSH: Zeitlimit erreicht. Die Sitzung kann noch laufen; bitte keine riskante Anfrage blind wiederholen.', 'DSH: Time limit reached. The session may still be running; do not blindly repeat a risky request.'), success: false })
     } finally {
       stopTyping?.()
       stopTyping = null
@@ -113,70 +116,70 @@ export function apply(ctx, config = {}) {
     if (!authorized(update, userId)) return
     const message = update.message
     if (update.callback_query) {
-      await api('answerCallbackQuery', { callback_query_id: update.callback_query.id, text: 'Nicht unterstützt.' })
+      await api('answerCallbackQuery', { callback_query_id: update.callback_query.id, text: t('Nicht unterstützt.', 'Not supported.') })
       return
     }
     const text = message?.text?.trim()
     if (typeof text === 'string' && text.length > 16000) {
-      await sendText(api, userId, 'Nachricht zu lang (maximal 16 000 Zeichen).')
+      await sendText(api, userId, t('Nachricht zu lang (maximal 16 000 Zeichen).', 'Message too long (maximum 16,000 characters).'))
       return
     }
     if (!text) {
-      await sendText(api, userId, 'Derzeit nur Textnachrichten unterstützt.')
+      await sendText(api, userId, t('Derzeit nur Textnachrichten unterstützt.', 'Only text messages are currently supported.'))
       return
     }
     const command = text.split(/\s/, 1)[0].toLowerCase().split('@')[0]
     if (command === '/help' || command === '/start') {
-      await sendText(api, userId, 'DSH Telegram: Textnachrichten; /status Sitzung und Modell, /new neue Sitzung, /compact Gespräch verdichten, /stop Antwort abbrechen. Anhänge und Freigaben per Telegram sind nicht verfügbar.')
+      await sendText(api, userId, t('DSH Telegram: Textnachrichten; /status Sitzung und Modell, /new neue Sitzung, /compact Gespräch verdichten, /stop Antwort abbrechen. Anhänge und Freigaben per Telegram sind nicht verfügbar.', 'DSH Telegram: Send text messages; /status session and model, /new new session, /compact compact conversation, /stop cancel response. Attachments and approvals via Telegram are unavailable.'))
       return
     }
     if (command === '/status') {
-      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, 'Verwendung: /status'); return }
+      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, t('Verwendung: /status', 'Usage: /status')); return }
       const status = headless.status(ownedSessionId)
-      await sendText(api, userId, formatStatus({ hasSession: Boolean(state.sessionId), active: Boolean(pending) || status === 'running' || Boolean(scheduledPending.size), model: config.model }))
+      await sendText(api, userId, formatStatus({ hasSession: Boolean(state.sessionId), active: Boolean(pending) || status === 'running' || Boolean(scheduledPending.size), model: config.model, language: config.language }))
       return
     }
     if (command === '/stop') {
       if (ownedSessionId) { headless.cancel(ownedSessionId); stopTyping?.() }
-      else if (active) { await sendText(api, userId, 'Sitzung wird noch erstellt; Stopp derzeit nicht möglich.'); return }
-      await sendText(api, userId, 'Stopp angefordert.')
+      else if (active) { await sendText(api, userId, t('Sitzung wird noch erstellt; Stopp derzeit nicht möglich.', 'The session is still being created; stopping is not yet possible.')); return }
+      await sendText(api, userId, t('Stopp angefordert.', 'Stop requested.'))
       return
     }
     if (command === '/new') {
-      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, 'Verwendung: /new'); return }
+      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, t('Verwendung: /new', 'Usage: /new')); return }
       await updateState({ sessionId: null })
       ownedSessionId = null
       await session()
-      await sendText(api, userId, 'Neue Sitzung erstellt. Die nächste Nachricht beginnt das Gespräch.')
+      await sendText(api, userId, t('Neue Sitzung erstellt. Die nächste Nachricht beginnt das Gespräch.', 'New session created. The next message starts the conversation.'))
       return
     }
     if (command === '/compact') {
-      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, 'Verwendung: /compact'); return }
-      if (!state.sessionId) { await sendText(api, userId, 'Noch keine Sitzung zum Verdichten vorhanden.'); return }
+      if (text.split(/\s+/).length !== 1) { await sendText(api, userId, t('Verwendung: /compact', 'Usage: /compact')); return }
+      if (!state.sessionId) { await sendText(api, userId, t('Noch keine Sitzung zum Verdichten vorhanden.', 'There is no session to compact yet.')); return }
       const sessionId = await session()
       try {
         const result = await headless.compact(sessionId, controller.signal)
         await sendText(api, userId, result === null
-          ? 'Noch kein sinnvoll verdichtbarer Gesprächsverlauf.'
-          : `Kontext verdichtet: ${result.shadowedSeqs.length} Einträge (~${result.shadowedTokenCount} Tokens).`)
+          ? t('Noch kein sinnvoll verdichtbarer Gesprächsverlauf.', 'There is no conversation history worth compacting yet.')
+          : t(`Kontext verdichtet: ${result.shadowedSeqs.length} Einträge (~${result.shadowedTokenCount} Tokens).`, `Context compacted: ${result.shadowedSeqs.length} entries (~${result.shadowedTokenCount} tokens).`))
       } catch (error) {
         const message = {
-          busy: 'Sitzung beschäftigt; bitte nach der Antwort erneut versuchen.',
-          cancelled: 'Verdichtung abgebrochen.',
-          changed: 'Verlauf hat sich während der Verdichtung geändert; bitte prüfen, nicht blind wiederholen.',
-          summary: 'Keine brauchbare Zusammenfassung erzeugt; bitte prüfen.',
-          commit: 'Verdichtung nicht sauber abgeschlossen; Sitzungsverlauf vor erneutem Versuch prüfen.',
-          persistence: 'Verdichtung abgeschlossen, konnte aber nicht gespeichert werden; bitte prüfen.'
+          busy: t('Sitzung beschäftigt; bitte nach der Antwort erneut versuchen.', 'Session busy; please try again after the response.'),
+          cancelled: t('Verdichtung abgebrochen.', 'Compaction cancelled.'),
+          changed: t('Verlauf hat sich während der Verdichtung geändert; bitte prüfen, nicht blind wiederholen.', 'History changed during compaction; please review it rather than blindly retrying.'),
+          summary: t('Keine brauchbare Zusammenfassung erzeugt; bitte prüfen.', 'No usable summary was generated; please review.'),
+          commit: t('Verdichtung nicht sauber abgeschlossen; Sitzungsverlauf vor erneutem Versuch prüfen.', 'Compaction did not finish cleanly; review the session history before retrying.'),
+          persistence: t('Verdichtung abgeschlossen, konnte aber nicht gespeichert werden; bitte prüfen.', 'Compaction completed but could not be saved; please review.')
         }[error?.name === 'ManualCompactionError' ? error.code : '']
         if (!message) {
           ctx.logger.warn(`Telegram manual compaction unavailable: ${error?.name || 'Error'} / ${error?.code || 'unspecified'}`)
-          await sendText(api, userId, 'Verdichtung fehlgeschlagen. Die Sitzung bleibt erhalten; bitte später erneut versuchen oder Dienstprotokoll prüfen.')
+          await sendText(api, userId, t('Verdichtung fehlgeschlagen. Die Sitzung bleibt erhalten; bitte später erneut versuchen oder Dienstprotokoll prüfen.', 'Compaction failed. The session is preserved; try again later or check the service log.'))
         } else await sendText(api, userId, message)
       }
       return
     }
     if (command.startsWith('/') && command !== '/') {
-      await sendText(api, userId, 'Unbekannter Befehl. /help')
+      await sendText(api, userId, t('Unbekannter Befehl. /help', 'Unknown command. /help'))
       return
     }
     const result = await prompt(text)
@@ -226,8 +229,8 @@ export function apply(ctx, config = {}) {
       const result = new Promise(resolve => scheduledPending.set(sessionId, { requestId, resolve, answer: '' }))
       try {
         headless.prompt(sessionId, job.prompt, requestId)
-        const outcome = await withDeadline(result, 20 * 60 * 1000, { text: 'DSH: Zeitlimit der geplanten Aufgabe überschritten.', success: false })
-        const text = outcome.success ? outcome.text : `Geplanter Lauf fehlgeschlagen. ${outcome.text}`
+        const outcome = await withDeadline(result, 20 * 60 * 1000, { text: t('DSH: Zeitlimit der geplanten Aufgabe überschritten.', 'DSH: Scheduled task time limit exceeded.'), success: false })
+        const text = outcome.success ? outcome.text : t(`Geplanter Lauf fehlgeschlagen. ${outcome.text}`, `Scheduled run failed. ${outcome.text}`)
         await updateSchedule(job.id, { status: 'generated', outbox: { text, nextChunk: 0 } })
         retrying.add(job.id)
         try { await deliverScheduled(job) } finally { retrying.delete(job.id) }
@@ -235,7 +238,7 @@ export function apply(ctx, config = {}) {
     } catch (error) {
       // Do not overwrite a generated outbox on a Telegram transport failure.
       if (!scheduleState.jobs[job.id]?.outbox) await updateSchedule(job.id, {
-        status: 'generated', outbox: { text: 'Geplanter Lauf fehlgeschlagen. Bitte manuell prüfen; keine automatische Neuausführung.', nextChunk: 0 }
+        status: 'generated', outbox: { text: t('Geplanter Lauf fehlgeschlagen. Bitte manuell prüfen; keine automatische Neuausführung.', 'Scheduled run failed. Please review manually; there will be no automatic rerun.'), nextChunk: 0 }
       })
       console.error('Scheduled job failed:', job.id, error?.name || 'Error', error?.code || 'unspecified')
     }
@@ -266,13 +269,13 @@ export function apply(ctx, config = {}) {
     releaseLock = await acquirePollerLock(paths.lock)
     // No -1 offset trick or first-contact pairing. Reject all users other than the existing pinned ID.
     ctx.logger.info('Telegram bridge started (authorized private chat only)')
-    try { await syncPrivateCommands(api, userId) }
+    try { await syncPrivateCommands(api, userId, config.language) }
     catch (error) { ctx.logger.warn(`Telegram private command menu could not be updated: ${error?.name || 'Error'}`) }
     if (config.enableSchedules === true) {
       for (const job of jobs) {
         arm(job)
         if (['started', 'failed'].includes(scheduleState.jobs[job.id]?.status) && !scheduleState.jobs[job.id]?.outbox) {
-          await updateSchedule(job.id, { status: 'generated', outbox: { text: 'Geplanter Lauf fehlgeschlagen oder beim Neustart unterbrochen. Bitte manuell prüfen; keine automatische Neuausführung.', nextChunk: 0 } })
+          await updateSchedule(job.id, { status: 'generated', outbox: { text: t('Geplanter Lauf fehlgeschlagen oder beim Neustart unterbrochen. Bitte manuell prüfen; keine automatische Neuausführung.', 'Scheduled run failed or was interrupted by a restart. Please review manually; there will be no automatic rerun.'), nextChunk: 0 } })
         }
       }
       retryTimer = setInterval(() => {
@@ -322,12 +325,12 @@ export function apply(ctx, config = {}) {
     for (const timer of timers.values()) clearTimeout(timer)
     timers.clear()
     if (retryTimer) clearInterval(retryTimer)
-    for (const target of scheduledPending.values()) target.resolve({ text: 'DSH: Verbindung beendet.', success: false })
+    for (const target of scheduledPending.values()) target.resolve({ text: t('DSH: Verbindung beendet.', 'DSH: Connection closed.'), success: false })
     scheduledPending.clear()
     if (pending) {
       const target = pending
       pending = null
-      target.resolve({ text: 'DSH: Verbindung beendet.', success: false })
+      target.resolve({ text: t('DSH: Verbindung beendet.', 'DSH: Connection closed.'), success: false })
     }
     await pollPromise
     await Promise.race([Promise.allSettled([...inflight]), new Promise(resolve => setTimeout(resolve, 5000))])

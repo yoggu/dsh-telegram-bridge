@@ -8,6 +8,11 @@
 !/index.js
 !/commands.js
 !/commands.test.js
+!/config.js
+!/language.test.js
+!/locale/
+/locale/*
+!/locale/en.json
 !/headless-session.js
 !/headless-session.test.js
 !/typing.js

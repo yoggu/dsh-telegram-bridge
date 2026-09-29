@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Telegram bridge",
+    "description": "Host-only bridge for one pre-authorized private Telegram chat. Commands, status, and bridge messages default to English; German is available with language: de."
+  }
+}
